@@ -1,50 +1,51 @@
 package com.adnivak.newfile.action;
 
+import com.intellij.codeInsight.completion.CompletionParameters;
+import com.intellij.codeInsight.completion.CompletionResultSet;
+import com.intellij.codeInsight.lookup.CharFilter;
+import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.ide.IdeView;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.psi.PsiDirectory;
+import com.intellij.util.textCompletion.TextCompletionProvider;
+import com.intellij.util.textCompletion.TextFieldWithCompletion;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
+
+import static com.adnivak.newfile.util.SuggestionUtils.getSuggestions;
 
 // todo: create integration plugin, doc tool window in bottom, like in VIM
 // improve suggestion list design
 public class CreateFileDialog extends DialogWrapper {
     private static final Logger log = Logger.getInstance(CreateFileDialog.class);
     private JPanel contentPane;
-    private JTextField fileNameInput;
-    private JList<String> suggestionList;
+    private TextFieldWithCompletion fileNameInput;
     private JLabel basePathLabel;
     private final DataContext dataContext;
 
     public CreateFileDialog(DataContext dataContext) {
         super(true);
         this.dataContext = dataContext;
+
         setTitle("New File");
         init();
-
-
-        DefaultListModel<String> model = new DefaultListModel<>();
-        suggestionList.setModel(model);
-//        model.;
 
         // call onCancel() when cross is clicked
 //        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -55,57 +56,11 @@ public class CreateFileDialog extends DialogWrapper {
 //        });
 
         // call onCancel() on ESCAPE
-        contentPane.registerKeyboardAction(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                onCancel();
-            }
-        }, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-
-        fileNameInput.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                onChange("insert");
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                onChange("remove");
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                onChange("update");
-            }
-            public void onChange (String e) {
-                IdeView view = LangDataKeys.IDE_VIEW.getData(dataContext);
-                if (view == null) {
-                    return;
-                }
-                PsiDirectory directory = view.getOrChooseDirectory();
-                if (directory == null) {
-                    return;
-                }
-                List<String> suggestions = getSuggestions(directory, fileNameInput.getText());
-                model.clear();
-                model.addAll(suggestions);
-                // todo: introduce auto fill
-            }
-        });
-
-        fileNameInput.setFocusTraversalKeys(
-                KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, Collections.EMPTY_SET);
-        fileNameInput.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_TAB && !model.isEmpty()) {
-                    String bestMatch = model.get(0);
-                    String inputText = fileNameInput.getText();
-                    int lastIndex = inputText.lastIndexOf('/');
-                    String path = inputText.substring(0, lastIndex == -1 ? inputText.length() : lastIndex);
-                    fileNameInput.setText(path.concat("/").concat(bestMatch).concat("/"));
-                }
-            }
-        });
+        contentPane.registerKeyboardAction(
+                e -> onCancel(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        );
 
 
         IdeView view = LangDataKeys.IDE_VIEW.getData(dataContext);
@@ -118,59 +73,52 @@ public class CreateFileDialog extends DialogWrapper {
         }
 
         Project project = CommonDataKeys.PROJECT.getData(dataContext);
-        String basePath = project.getBasePath().concat("/");
-        String path = directory.getVirtualFile().getCanonicalPath().replaceFirst("^/", "").substring(basePath.length()).concat("/");
+        if (project == null) {
+            return;
+        }
+        VirtualFile guessedProjectDir = ProjectUtil.guessProjectDir(project);
+        if (guessedProjectDir == null) {
+            return;
+        }
+        String basePath = guessedProjectDir.getPresentableUrl().concat(File.separator);
+        String path = directory.getVirtualFile().getPresentableUrl().substring(basePath.length()).concat(File.separator);
         fileNameInput.setText(path);
         basePathLabel.setText("<html><b>" + basePath + "</b></html>");
-    }
-
-
-    // todo: improve suggestions, sort for best match
-    private List<String> getSuggestions(PsiDirectory directory, String text) {
-        Project project = CommonDataKeys.PROJECT.getData(dataContext);
-        String basePath = project.getBasePath().concat("/");
-        Path path = Paths.get(basePath + fileNameInput.getText());
-        boolean isExists = Files.isDirectory(path);
-        if (!isExists) {
-            path = path.getParent();
-        }
-        boolean isNewPath = !Files.isDirectory(path);
-        if (isNewPath) {    // creating a new path that currently not exists
-            return Collections.emptyList();
-        }
-        List<String> fileList = new ArrayList<>();
-        try {
-            Files.walkFileTree(path, EnumSet.noneOf(FileVisitOption.class), 1, new SimpleFileVisitor<>() {
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {if (attrs.isDirectory()) {
-                        fileList.add(String.valueOf(file.getFileName()));
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException ex) {
-            log.error("invalid file path", ex);
-        }
-        return fileList;
     }
 
     @Override
     protected void doOKAction() {
         super.doOKAction();
+        createNew();
+    }
 
+    private boolean createNew() {
         Project project = CommonDataKeys.PROJECT.getData(dataContext);
-        String basePath = project.getBasePath().concat("/");
-        String filePath = basePath.concat(fileNameInput.getText().replaceFirst("^/", ""));
-        File newFile = new File(filePath);
+        if (project == null) {
+            return false;
+        }
+        String basePath = project.getBasePath();
+        String fileNameInputText = fileNameInput.getText();
+        Path filePath = Paths.get(basePath, fileNameInputText);
+        boolean isDirectory = fileNameInputText.endsWith("\\") || fileNameInputText.endsWith("/");
+        boolean created;
         try {
-            newFile.getParentFile().mkdirs();
-            newFile.createNewFile();
+            if (isDirectory) {
+                Files.createDirectories(filePath);
+                created = true;
+            } else {
+                File newFile = new File(filePath.toString());
+                newFile.getParentFile().mkdirs();
+                created = newFile.createNewFile();
+            }
             VirtualFileManager.getInstance().syncRefresh();
         } catch (IOException e) {
+            created = false;
             log.error("unable to create file", e);
         } finally {
             dispose();
         }
-
+        return created;
     }
 
     private void onCancel() {
@@ -186,5 +134,46 @@ public class CreateFileDialog extends DialogWrapper {
     @Override
     public @Nullable JComponent getPreferredFocusedComponent() {
         return fileNameInput;
+    }
+
+    private void createUIComponents() {
+        this.fileNameInput = getFileNameInput();
+    }
+
+    private TextFieldWithCompletion getFileNameInput() {
+        TextCompletionProvider provider = new TextCompletionProvider() {
+            @Override
+            public String getAdvertisement() {
+                return null;
+            }
+
+            @Override
+            public String getPrefix(@NotNull String text, int offset) {
+                return text;
+            }
+
+            @Override
+            public @NotNull CompletionResultSet applyPrefixMatcher(@NotNull CompletionResultSet result, @NotNull String prefix) {
+                return result.caseInsensitive();
+            }
+
+            @Override
+            public CharFilter.Result acceptChar(char c) {
+                return CharFilter.Result.ADD_TO_PREFIX;
+            }
+
+            @Override
+            public void fillCompletionVariants(@NotNull CompletionParameters parameters, @NotNull String prefix, @NotNull CompletionResultSet result) {
+                Project project = parameters.getPosition().getProject();
+                List<String> suggestions = getSuggestions(project, fileNameInput.getText());
+                for (String suggestion : suggestions) {
+                    result.addElement(LookupElementBuilder.create(suggestion));
+                }
+            }
+        };
+        Project project = CommonDataKeys.PROJECT.getData(dataContext);
+        TextFieldWithCompletion textFieldWithCompletion = new TextFieldWithCompletion(project, provider, "", true, true, true, true);
+        textFieldWithCompletion.getComponentPopupMenu();
+        return textFieldWithCompletion;
     }
 }

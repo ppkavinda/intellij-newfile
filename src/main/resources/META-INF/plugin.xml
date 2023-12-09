@@ -24,10 +24,16 @@
     <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.java-capable</depends>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Add your extensions here -->
+        <toolWindow factoryClass="com.adnivak.newfile.toolwindow.CreateNewToolbarFactory" id="newFileToolbar" anchor="bottom"/>
+
+    </extensions>
     <actions>
         <action class="com.adnivak.newfile.action.CreateFileAction"
                 description="Create a new file"
                 id="createNewFile"
+                icon="AllIcons.Actions.AddFile"
                 text="New File">
             <add-to-group
                     group-id="NewGroup"
