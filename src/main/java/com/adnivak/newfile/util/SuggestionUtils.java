@@ -1,6 +1,5 @@
 package com.adnivak.newfile.util;
 
-import com.adnivak.newfile.action.CreateFileDialog;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
@@ -39,7 +38,8 @@ public class SuggestionUtils {
             Files.walkFileTree(path, EnumSet.noneOf(FileVisitOption.class), 1, new SimpleFileVisitor<>() {
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                     if (attrs.isDirectory()) {
-                        fileList.add(String.valueOf(file.getFileName()).concat(File.separator));
+                        fileList.add(String.valueOf(file.getFileName()));
+//                                .concat(File.separator));
                     }
                     return FileVisitResult.CONTINUE;
                 }

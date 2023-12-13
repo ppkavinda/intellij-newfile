@@ -24,11 +24,6 @@
     <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.java-capable</depends>
 
-    <extensions defaultExtensionNs="com.intellij">
-        <!-- Add your extensions here -->
-        <toolWindow factoryClass="com.adnivak.newfile.toolwindow.CreateNewToolbarFactory" id="newFileToolbar" anchor="bottom"/>
-
-    </extensions>
     <actions>
         <action class="com.adnivak.newfile.action.CreateFileAction"
                 description="Create a new file"
@@ -38,12 +33,15 @@
             <add-to-group
                     group-id="NewGroup"
                     anchor="first"/>
+            <keyboard-shortcut
+                    keymap="$default"
+                    first-keystroke="control alt N"/>
         </action>
     </actions>
 
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
-
+        <toolWindow factoryClass="com.adnivak.newfile.toolwindow.CreateNewToolbarFactory" id="Create New" anchor="bottom" name="" />
     </extensions>
 </idea-plugin>

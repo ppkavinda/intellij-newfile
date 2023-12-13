@@ -1,5 +1,6 @@
 package com.adnivak.newfile.action;
 
+import com.adnivak.newfile.provider.AutocompleteProvider;
 import com.intellij.codeInsight.completion.CompletionParameters;
 import com.intellij.codeInsight.completion.CompletionResultSet;
 import com.intellij.codeInsight.lookup.CharFilter;
@@ -32,7 +33,6 @@ import java.util.List;
 import static com.adnivak.newfile.util.SuggestionUtils.getSuggestions;
 
 // todo: create integration plugin, doc tool window in bottom, like in VIM
-// improve suggestion list design
 public class CreateFileDialog extends DialogWrapper {
     private static final Logger log = Logger.getInstance(CreateFileDialog.class);
     private JPanel contentPane;
@@ -172,8 +172,6 @@ public class CreateFileDialog extends DialogWrapper {
             }
         };
         Project project = CommonDataKeys.PROJECT.getData(dataContext);
-        TextFieldWithCompletion textFieldWithCompletion = new TextFieldWithCompletion(project, provider, "", true, true, true, true);
-        textFieldWithCompletion.getComponentPopupMenu();
-        return textFieldWithCompletion;
+        return new TextFieldWithCompletion(project, provider, "", true, true, true, true);
     }
 }
